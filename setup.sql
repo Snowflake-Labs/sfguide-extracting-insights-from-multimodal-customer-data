@@ -9,7 +9,7 @@ USE SCHEMA MULTIMODAL_CUSTOMER_SERVICE.DATA;
 ALTER ACCOUNT SET CORTEX_ENABLED_CROSS_REGION = 'ANY_REGION';
 
 CREATE OR REPLACE STAGE MULTIMODAL_CUSTOMER_SERVICE.DATA.CUSTOMER_CALLS_EXTERNAL
-  URL = 's3://sfquickstarts/sfguide-extracting-insights-from-multimodal-customer-data/AUDIO_DATA/'
+  URL = 's3://sfquickstarts/extracting-insights-from-multimodal-customer-data/AUDIO_DATA/'
   DIRECTORY = (ENABLE = TRUE);
 
 CREATE OR REPLACE STAGE MULTIMODAL_CUSTOMER_SERVICE.DATA.CUSTOMER_CALLS
@@ -22,7 +22,7 @@ CREATE OR REPLACE TABLE DATA.audio_file_list AS
     FROM DIRECTORY(@MULTIMODAL_CUSTOMER_SERVICE.DATA.Customer_Calls);
 
 CREATE OR REPLACE STAGE MULTIMODAL_CUSTOMER_SERVICE.DATA.COMPANY_DOCUMENTS
-  URL = 's3://sfquickstarts/sfguide-extracting-insights-from-multimodal-customer-data/DOCUMENT_DATA/'
+  URL = 's3://sfquickstarts/extracting-insights-from-multimodal-customer-data/DOCUMENT_DATA/'
   DIRECTORY = (ENABLE = TRUE);
 
 COPY FILES
@@ -54,36 +54,44 @@ CREATE TABLE IF NOT EXISTS transcription_results (
 );
 
 CREATE OR REPLACE STAGE MULTIMODAL_CUSTOMER_SERVICE.DATA.TABLE_DATA
-  URL = 's3://sfquickstarts/sfguide-extracting-insights-from-multimodal-customer-data/TABLE_DATA/'
+  URL = 's3://sfquickstarts/extracting-insights-from-multimodal-customer-data/TABLE_DATA/'
   DIRECTORY = (ENABLE = TRUE);
 
 CREATE OR REPLACE FILE FORMAT csv_format
-  TYPE = CSV
-  FIELD_DELIMITER = ','
-  SKIP_HEADER = 1;
+  TYPE = 'CSV'
+  PARSE_HEADER = TRUE
+  FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+  TRIM_SPACE = TRUE
+  EMPTY_FIELD_AS_NULL = TRUE;
 
-CREATE OR REPLACE TABLE CHAT_LOGS AS
-SELECT *
-FROM TABLE(
-  INFER_SCHEMA(
-    LOCATION=>'@TABLE_DATA/chat_logs.csv',
-    FILE_FORMAT=>'csv_format'
+CREATE OR REPLACE TABLE CHAT_LOGS
+USING TEMPLATE (
+  SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*))
+  FROM TABLE(
+    INFER_SCHEMA(
+      LOCATION => '@TABLE_DATA/chat_logs.csv',
+      FILE_FORMAT => 'csv_format'
+    )
   )
 );
 
 COPY INTO CHAT_LOGS
 FROM @TABLE_DATA/chat_logs.csv
-FILE_FORMAT = csv_format;
+FILE_FORMAT = (FORMAT_NAME = 'csv_format')
+MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;
 
-CREATE OR REPLACE TABLE SUPPORT_TICKETS AS
-SELECT *
+CREATE OR REPLACE TABLE SUPPORT_TICKETS
+USING TEMPLATE (
+  SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*))
   FROM TABLE(
     INFER_SCHEMA(
-      LOCATION=>'@TABLE_DATA/support_tickets.csv',  -- Specify your second file name
-      FILE_FORMAT=>'csv_format'
+      LOCATION => '@TABLE_DATA/support_tickets.csv',
+      FILE_FORMAT => 'csv_format'
     )
-  );
+  )
+);
 
 COPY INTO SUPPORT_TICKETS
 FROM @TABLE_DATA/support_tickets.csv
-FILE_FORMAT = csv_format;
+FILE_FORMAT = (FORMAT_NAME = 'csv_format')
+MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;
